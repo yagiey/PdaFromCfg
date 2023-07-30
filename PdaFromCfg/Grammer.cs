@@ -549,6 +549,12 @@ namespace PdaFromCfg
 			{
 				IEnumerable<Symbol> from = vocab.Where(it => it.Rank == rank);
 				IEnumerable<Symbol> rest = vocab.Where(it => it.Rank == -1);
+				if (rest.Any() && !from.Any())
+				{
+					// invalid grammer!
+					// detected discontinuity
+					throw new Exception();
+				}
 
 				if (!rest.Any())
 				{
