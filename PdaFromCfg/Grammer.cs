@@ -57,6 +57,8 @@ namespace PdaFromCfg
 			}
 		}
 
+		#region chomsky standardization
+
 		public void ToChomskyStandardForm()
 		{
 			if (StartSymbol is null)
@@ -260,51 +262,6 @@ namespace PdaFromCfg
 			}
 		}
 
-		private static IEnumerable<SymbolList> MakeNewRules(Symbol lhs, SymbolList rhs, IEnumerable<int> positions)
-		{
-			if (!positions.Any())
-			{
-				throw new Exception();
-			}
-			if (positions.Any(it => it < 0))
-			{
-				throw new Exception();
-			}
-
-			var directProduct =
-				EnumerateDirectProduct(
-					Enumerable.Repeat(new bool[] { false, true }, positions.Count())
-				);
-
-			foreach (var dp in directProduct)
-			{
-				SymbolList l = new();
-				var itor = dp.GetEnumerator();
-				for (int i = 0; i < rhs.Count; i++)
-				{
-					if (positions.Contains(i))
-					{
-						itor.MoveNext();
-						if (itor.Current)
-						{
-							l.Add(lhs);
-						}
-					}
-					else
-					{
-						l.Add(rhs[i]);
-					}
-				}
-
-				if (l.Count == 0)
-				{
-					l.Add(SymbolPool.Empty);
-				}
-
-				yield return l;
-			}
-		}
-
 		private void RemoveUnitProductionRules()
 		{
 			while (true)
@@ -482,6 +439,53 @@ namespace PdaFromCfg
 			foreach(Symbol key in set)
 			{
 				_productionRules.Remove(key);
+			}
+		}
+
+		#endregion
+
+		private static IEnumerable<SymbolList> MakeNewRules(Symbol lhs, SymbolList rhs, IEnumerable<int> positions)
+		{
+			if (!positions.Any())
+			{
+				throw new Exception();
+			}
+			if (positions.Any(it => it < 0))
+			{
+				throw new Exception();
+			}
+
+			var directProduct =
+				EnumerateDirectProduct(
+					Enumerable.Repeat(new bool[] { false, true }, positions.Count())
+				);
+
+			foreach (var dp in directProduct)
+			{
+				SymbolList l = new();
+				var itor = dp.GetEnumerator();
+				for (int i = 0; i < rhs.Count; i++)
+				{
+					if (positions.Contains(i))
+					{
+						itor.MoveNext();
+						if (itor.Current)
+						{
+							l.Add(lhs);
+						}
+					}
+					else
+					{
+						l.Add(rhs[i]);
+					}
+				}
+
+				if (l.Count == 0)
+				{
+					l.Add(SymbolPool.Empty);
+				}
+
+				yield return l;
 			}
 		}
 
