@@ -444,6 +444,200 @@ namespace PdaFromCfg
 
 		#endregion
 
+		public void ToGreibachStandardForm()
+		{
+			RemoveAllStartSymbolInRhs();
+			IsolateTerminalSymbol();
+			RemoveEmptyProductionRules();
+			RemoveUnitProductionRules();
+			RemoveUnnecessarydRules(CalcDeadSymbol(), CalcUnreachableSymbols());
+
+			bool doesStartSymbolDeriveEmpty = _productionRules[StartSymbol!].Contains(new SymbolList() { SymbolPool.Empty });
+			if (doesStartSymbolDeriveEmpty)
+			{
+				_productionRules[StartSymbol!].Remove(new SymbolList() { SymbolPool.Empty });
+			}
+
+			RemoveLeftRecursion();
+			RemoveEmptyProductionRules();
+			RemoveUnnecessarydRules(CalcDeadSymbol(), CalcUnreachableSymbols());
+
+			MakeLeftMostSymbolTerminal();
+
+			if (doesStartSymbolDeriveEmpty)
+			{
+				_productionRules[StartSymbol!].Add(new SymbolList() { SymbolPool.Empty });
+			}
+
+			SetSymbolRank();
+
+			return;
+		}
+
+		private void RemoveLeftRecursion()
+		{
+			List<Symbol> nonterm = new(GetNonTerminalSymbols());
+			nonterm.Sort((lhs, rhs) => rhs.CompareTo(lhs));
+
+			for (int i = 0; i < nonterm.Count; i++)
+			{
+				Symbol ai = nonterm[i];
+
+				for (int j = 0; j <= i - 1; j++)
+				{
+					Symbol aj = nonterm[j];
+					IList<SymbolList> rules = _productionRules[nonterm[j]];
+
+					// find rules whitch going to be replaced
+					IList<SymbolList> targets = new List<SymbolList>();
+					foreach(var list in _productionRules[ai])
+					{
+						if (list[0] == aj)
+						{
+							targets.Add(list);
+						}
+					}
+
+					foreach (var before in targets)
+					{
+						// add
+						IList<SymbolList> newRules = new List<SymbolList>();
+						foreach (var after in rules)
+						{
+							SymbolList replaced = new(before);
+							replaced.ReplaceAll(new SymbolList(aj), after);
+							_productionRules[ai].Add(replaced);
+						}
+						// remove
+						_productionRules[ai].Remove(before);
+					}
+
+					// remove direct left recursion
+					RemoveDirectLeftRecursion(ai);
+				}
+			}
+		}
+
+		private void RemoveDirectLeftRecursion(Symbol symbol)
+		{
+			IList<SymbolList> recurs = new List<SymbolList>();
+			IList<SymbolList> nonrecurs = new List<SymbolList>();
+
+			// find direct left recursion
+			foreach(SymbolList list in _productionRules[symbol])
+			{
+				if (list[0] == symbol)
+				{
+					recurs.Add(list);
+				}
+				else
+				{
+					nonrecurs.Add(list);
+				}
+			}
+
+			if (!recurs.Any())
+			{
+				return;
+			}
+
+			// random name
+			string randomName;
+			do
+			{
+				randomName = $"Rest_{GenerateRandomName(4, AvailableCharactors)}";
+			} while (GetVocab().Any(it => it.Name == randomName));
+
+			Symbol rest = _symbolPool.GetSymbol(randomName);
+
+
+			IList<SymbolList> newRules = new List<SymbolList>();
+			foreach (SymbolList nonrecur in nonrecurs)
+			{
+				SymbolList l = new(nonrecur) { rest };
+				newRules.Add(l);
+			}
+			IList<SymbolList> newRulesRest = new List<SymbolList>();
+			foreach (var recur in recurs)
+			{
+				SymbolList l = new(recur.Skip(1)) { rest };
+				newRulesRest.Add(l);
+			}
+			newRulesRest.Add(new SymbolList() { SymbolPool.Empty });
+
+			// remove
+			foreach (SymbolList lst in nonrecurs.Union(recurs))
+			{
+				_productionRules[symbol].Remove(lst);
+			}
+			// add new rules
+			foreach (SymbolList lst in newRules)
+			{
+				_productionRules[symbol].Add(lst);
+			}
+			_productionRules.Add(rest, new List<SymbolList>());
+			foreach (var lst in newRulesRest)
+			{
+				_productionRules[rest].Add(lst);
+			}
+		}
+
+		private void MakeLeftMostSymbolTerminal()
+		{
+			while (true)
+			{
+
+				bool find = false;
+				foreach (var pair in _productionRules)
+				{
+					if (pair.Value.All(it => it[0].IsTerminal || it[0].IsEmpty || it[0].IsEos))
+					{
+						// all rule's leftmost symbol is not a non-terminal symbol.
+						continue;
+					}
+
+					bool replacable = pair.Value.All(it1 => _productionRules[it1[0]].All(it2 => it2[0].IsTerminal));
+					if (replacable)
+					{
+						find = true;
+
+						HashSet<SymbolList> toBeDeleted = new();
+						HashSet<SymbolList> substitutions = new();
+						foreach (SymbolList list in pair.Value)
+						{
+							if (!list[0].IsTerminal)
+							{
+								toBeDeleted.Add(list);
+								foreach (SymbolList list2 in _productionRules[list[0]])
+								{
+									substitutions.Add(new SymbolList(list2.Concat(list.Skip(1))));
+								}
+							}
+						}
+
+						foreach (var item in toBeDeleted)
+						{
+							pair.Value.Remove(item);
+						}
+						foreach (var item in substitutions)
+						{
+							pair.Value.Add(item);
+						}
+
+						break;
+					}
+				}
+
+				if (!find)
+				{
+					// no replacable symbol
+					break;
+				}
+			}
+
+			return;
+		}
+
 		private static IEnumerable<SymbolList> MakeNewRules(Symbol lhs, SymbolList rhs, IEnumerable<int> positions)
 		{
 			if (!positions.Any())
@@ -640,6 +834,26 @@ namespace PdaFromCfg
 			foreach (var item in _terminalSymbols.Keys)
 			{
 				result.Add(item);
+			}
+			return result;
+		}
+
+		public HashSet<Symbol> GetNonTerminalSymbols()
+		{
+			HashSet<Symbol> result = new();
+			foreach(var pair in _productionRules)
+			{
+				result.Add(pair.Key);
+				foreach (SymbolList list in pair.Value)
+				{
+					foreach (Symbol symbol in list)
+					{
+						if(!symbol.IsTerminal && !symbol.IsEmpty && !symbol.IsEos)
+						{
+							result.Add(symbol);
+						}
+					}
+				}
 			}
 			return result;
 		}

@@ -10,4 +10,12 @@
 		RightParen,
 		LiteralInteger,
 	}
+
+	enum TokenRec
+	{
+		a,
+		b,
+		c,
+		d,
+	}
 }
