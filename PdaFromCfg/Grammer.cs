@@ -463,6 +463,7 @@ namespace PdaFromCfg
 			RemoveUnnecessarydRules(CalcDeadSymbol(), CalcUnreachableSymbols());
 
 			MakeLeftMostSymbolTerminal();
+			RemoveUnnecessarydRules(CalcDeadSymbol(), CalcUnreachableSymbols());
 
 			if (doesStartSymbolDeriveEmpty)
 			{
@@ -596,7 +597,7 @@ namespace PdaFromCfg
 						continue;
 					}
 
-					bool replacable = pair.Value.All(it1 => _productionRules[it1[0]].All(it2 => it2[0].IsTerminal));
+					bool replacable = pair.Value.All(it1 => it1[0].IsTerminal || _productionRules[it1[0]].All(it2 => it2[0].IsTerminal));
 					if (replacable)
 					{
 						find = true;
